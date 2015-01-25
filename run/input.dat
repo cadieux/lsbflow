@@ -1,0 +1,73 @@
+ &dimen
+ 	nx		=	224,		! streamwise (must be divisible by 4)
+ 	ny		=	24,			! spanwise (must be divisible by 2)
+ 	nz		=	32 /		! vertical
+ &flaglist
+ 	nstart	=	0,			! 0: start from scratch, 1: start from restart file
+ 	iwrite	=	1,			! 0: no output 1: output fields in phys space
+ 	debug	=	1,			! 0: no debug info, 1: some debug info, 2: max debug info
+ 	io_mpi	=	1 /			! 0: each proc writes own file, 1: mpi read write single file
+ &run
+ 	cfl		=	0.1,		! desired CFL #
+ 	dtadapt = 	1,			! 0: constant time step, 1: adaptive time stepping
+ 	nsteps	=	20,			! # of time steps to perform
+ 	iomod	=	10,			! output fields and debug info every #iomod steps
+ 	otfavg	=	1,			! 0: no averaging, 1: on-the-fly averaging
+ 	istartavg = 88000,		! iteration # at which to start on-the-fly averaging
+ 	mapping =	2,			! algebraic mapping for Chebyshev points:
+						 		! 0: channel [-0.5*zlen,0.5*zlen],
+								! 1: BL flow [0,infty), 
+								! 2: BL flow [0,zlen],
+								! 3: channel flow [0,zlen],
+	blfac	=	8.0,	 	! boundary layer growth factor: d*_inlet/d*_outflow, controls delta z+
+								! 8.0-10.: appropriate for nz < 40 for Spalart LSB
+								! 24.0-40.0: appropriate for nz > 55 for Spalart LSB
+ 	ic		=	0,			! initical conditions:
+					 			! 0: ubar=blasius, tbar=thigh + (tlow-thigh)*z/zlen, u,v,w,temp=0
+					 			! 1: write your own initial condition in init.f90 file
+ 	bctype	=	0,			! boundary condition type:
+ 								! 0: Homogeneous, 
+ 								! 1: Spalart Suction/blowing W(x),
+ 								! 2: Sayadi wall BC for BL transition
+ 	istartbound = 0.,		! time after which to start applying non-zero Dirichlet BC
+ 	samp	=	0.3,		! desired mean flow deceleration due to suction
+ 	forcing	=	0,			! 0: streamwise periodic, 1: sponge layer for non-periodic flow
+ 	fsize	=	0.15,		! total sponge size as fraction of domain
+ 	lfsize	=	0.25,		! fraction of sponge used for left (inlet) forcing decay
+ 	sfsize	=	0.70,		! fraction of sponge used to ramp up forcing
+ 	linstab	=	0,			! linear stability analysis
+ 								! 0: no stability analysis
+ 								! 1: perform for given astar and Re #
+ 								! 2: perform for predefined range of astar and Re #
+ 	astar 	=	0.8,		! alpha* is the domain size non-dim by d*
+ 	ifrz	=	0,			! 0: regular simulation, 1: freezes mean flow
+ 	sgsflag =	0,			! 0: no subgrid-scale modeling, 1: SGS modeling active
+ 	ifilt	=	0,			! 0: no filtering, 1: filtering of fields enabled
+ 	modfilt =	0,			! filter only each modfilt time steps
+ 	dealiasflag = 2 /		! 0: no dealiasing, 1: 3/2 rule dealiasing, 2: spectral filter
+ &param
+ 	xlen	=	333.3333,	! streamwise domain size in [cm]
+ 	ylen	=	20.0,		! spanwise domain size in [cm]
+ 	zlen	=	33.3333,	! vertical domain size in [cm]
+ 	x0		=	8.3333,		! location of start of streamwise domain in [cm]
+ 	u0		=	1.0,		! freestream velocity (do not change) [cm/s]
+ 	xnu		=	0.001,		! kinematic viscosity (use xnu w/ x0 to set Re # at inflow)
+ 	prtl	=	0.71,		! Prandtl number (for buoyancy)
+ 	rayl	=	38000.,		! Rayleigh number
+ 	tayl	=	0.0,		! Taylor number (leave at zero, rotation not implemented)
+ 	ri		=	0.2,		! Richardson #
+ 	thigh	=	300.0,		! max temperature in Kelvin
+ 	tlow	=	300.0,		! min temperature in Kelvin
+ 	coex	=	3.37e-3,	! f = coex*g*deltaT
+ 	gx		=	0.0,		! streamwise component of gravity [cm/s^2]
+ 	gy		=	0.0,		! spanwise component of gravity [cm/s^2]
+ 	gz		=	-981.0,		! vertical component of gravity [cm/s^2]
+ 	cguess	=	(0.36,0.0)/	! guess for most unstable mode for orr-sommerfeld solver
+ &sgsin
+ 	sgsmodel=	3, 			! 0: Smagorinsky, 1: dynamic Smag, 2: sigma, 3: interscale
+	a 		=	1.0,		! three-point filter weight given to ends a/(2*a + b)
+	b 		=	6.0,		! three-point filter weight given to midpoint b/(2*a + b) 
+	CS 		=	0.1,		! Static Smagorinsky constant
+	kc 		=	0.6,		! Spectral filter cutoff wave number
+	filt_order = 1.0,		! Gaussian filter order: exp(-amp*[(k-kc)/(kmax-kc)]^(2*order))
+	filt_amp   = 20.0 /		! Gaussian filter amplitude

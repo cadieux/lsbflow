@@ -1,0 +1,52 @@
+{
+	"extensions":
+	[
+		"f90",
+		"f03",
+		"f08",
+		"f77",
+		"f"
+	],
+	"folders":
+	[
+		{
+			"file_exclude_patterns":
+			[
+				"*.o",
+				"*genmod.f90",
+				"*.fig",
+				"*.mat",
+				"*.fig",
+				"start*.dat",
+				"prev_start*.dat",
+				"q0*",
+				"qavg*",
+				"*grid.dat",
+				"*.mod"
+			],
+			"follow_symlinks": true,
+			"path": "."
+		},
+		{
+			"file_exclude_patterns":
+			[
+				"*.o",
+				"*genmod.f90",
+				"*.fig",
+				"*.mat",
+				"*.fig",
+				"start*.dat",
+				"prev_start*.dat",
+				"q0*",
+				"qavg*",
+				"*grid.dat",
+				"*.mod"
+			],
+			"follow_symlinks": true,
+			"path": "../run"
+		}
+	],
+	"tab_size": 4,
+	"translate_tabs_to_spaces": true,
+	"word_wrap": "true"
+}
