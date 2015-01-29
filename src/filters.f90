@@ -288,7 +288,7 @@ subroutine filter_q_3pt(q,q_filt,n4,n5,a,b,interpflag)
     if (.not. allocated(az)) allocate(az(nzpl), bz(nzpl), cz(nzpl), stat=err)
     if (err /= 0) write(*,*) "filter_q_3pt: Allocation request denied"
     if ( interpflag==1 ) then
-        if ( mapping==1 .or. mapping==2 .or. mapping==22 ) then
+        if ( mapping==1 .or. mapping==2 ) then
             ! use only one sided interpolating filter
             do k=2,nzp-1 ! do not include last point z(1) = +infty
                 dltm=zpts(k)-zpts(k-1)

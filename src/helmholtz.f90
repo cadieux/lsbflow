@@ -216,7 +216,7 @@ subroutine solve_nhom_helmholtz(rhs, bc, dtnui, diag, smat, simat)
     ! where phi has homogeneous boundary conditions
     use dim
     use grid
-    use runparam, only: mapping
+    use runparam, only: mapping, blfac
     use paral, only: wbar, wbarpp
     !     use mats
     use flags, only: debug
@@ -261,27 +261,23 @@ subroutine solve_nhom_helmholtz(rhs, bc, dtnui, diag, smat, simat)
             hbot(1:nzp) = exp( -bbot*zpts(1:nzp) )
             hbot(1) = 0.0
             d2hbot(:) = bbot**2.0*hbot(:)
-        case(2) ! finite BL
-            ! exponential for bottom from blayscal, CTR blending-function for top
-            ! to ensure dhtop/dz | z=zpts(1) = 0
+        case(2) ! well-resolved Blasius BL problem
             h = zpts(1) - zpts(nzp)
-            btop = 8.*atan(1.)
-    !         btop = .001
-            bbot = 5.
-            htop(1:nzp) = zpts(1:nzp)/h - sin( btop*zpts(1:nzp)/h )/btop
-            d2htop = btop/h**2.0*sin( btop*zpts(1:nzp)/h )
-!             htop = wbar/wbar(1)
-!             htop(nzp) = 0.0
-!             d2htop = wbarpp/wbar(1)
-    !         htop(1:nzp) = exp( -btop*(h-zpts(1:nzp)) )
-    !         d2htop = btop**2.0*htop
-    !         htop = exp(btop*(zpts-h))*(1.-exp(-2.0*btop*zpts))
-    !         htop = htop/( 1.-exp(-2.0*btop*h) )
-    !         d2htop = btop**2.0*htop
+            bbot = 5.0 !blfac
             hbot = ( exp(-bbot*zpts) - exp(bbot*(zpts-2.0*h)) )
             hbot = hbot/( 1.-exp(-2.0*bbot*h) )
-!             hbot(1:nzp) = exp( -bbot*zpts(1:nzp) )
             d2hbot = bbot**2*hbot
+            htop = wbar/wbar(1)
+            htop(nzp) = 0.
+            d2htop = wbarpp/wbar(1)
+            ! exponential for bottom from blayscal, CTR blending-function for top
+            ! to ensure dhtop/dz | z=zpts(1) = 0
+!             h = zpts(1) - zpts(nzp)
+!             btop = 8.*atan(1.)
+!     !         btop = .001
+!             htop(1:nzp) = zpts(1:nzp)/h - sin( btop*zpts(1:nzp)/h )/btop
+!             d2htop = btop/h**2.0*sin( btop*zpts(1:nzp)/h )
+
         case(3) ! channel flow from z = 0 to zlen
             btop = 50.0
             bbot = 50.0
@@ -307,23 +303,6 @@ subroutine solve_nhom_helmholtz(rhs, bc, dtnui, diag, smat, simat)
     !         d2htop = btop/h**2.0*sin( btop*zpts(1:nzp)/h )
     !         hbot = 1. - htop
     !         d2hbot = -d2htop
-        case(4) ! equally space points from z = 0 to zlen
-            ! linear htop, hbot
-            width = zpts(1) - zpts(nzp)
-            htop(1:nzp) = (zpts(1:nzp) - zpts(nzp))/width ! hbot(1) = 1, hbot(nzp) = 0
-            hbot(1:nzp) = -(zpts(1:nzp) - zpts(1))/width  ! h2(1) = 0, h2(nzp) = 1
-            d2htop = 0.0
-            d2hbot = 0.0
-
-        case(22) ! well-resolved Blasius BL problem
-            h = zpts(1) - zpts(nzp)
-            bbot = 5.
-            hbot = ( exp(-bbot*zpts) - exp(bbot*(zpts-2.0*h)) )
-            hbot = hbot/( 1.-exp(-2.0*bbot*h) )
-            d2hbot = bbot**2*hbot
-            htop = wbar/wbar(1)
-            htop(nzp) = 0.
-            d2htop = wbarpp/wbar(1)
             
     end select
 

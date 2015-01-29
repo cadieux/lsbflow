@@ -519,6 +519,112 @@
 	},
 	"buffers":
 	[
+		{
+			"file": "navierstokes.f90",
+			"settings":
+			{
+				"buffer_size": 56461,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "init.f90",
+			"settings":
+			{
+				"buffer_size": 25356,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "modfftw.f90",
+			"settings":
+			{
+				"buffer_size": 4236,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "mpi_setup.f90",
+			"settings":
+			{
+				"buffer_size": 1544,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "io.f90",
+			"settings":
+			{
+				"buffer_size": 23567,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "helmholtz.f90",
+			"settings":
+			{
+				"buffer_size": 13192,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "Searching 17 files for \"mapping\"\n\n/home/f/Code/clean_lsbmpi/src/chebyshev.f90:\n  255                  ! FFTW computes the un-normalized transforms\n  256                  ! normalize by logical size\n  257:                 ! and apply mapping (chain rule)\n  258                  beta = alpha*gf / n_logical\n  259              end do\n  ...\n  340  !             end do\n  341  \n  342: !             ! apply mapping (chain rule)\n  343  !             dudzf(i,j,:) = t*gf\n  344  ! !             dudzf(i,j,:) = real(t)*gf\n\n/home/f/Code/clean_lsbmpi/src/common.f90:\n   73  public\n   74  save\n   75: integer :: nsteps, iomod, otfavg, istartavg, mapping, ic, bctype, forcing, linstab, ifrz, dtadapt, sgsflag, ifilt, modfilt, interpflag, dealiasflag\n   76  real :: cfl, blfac, fsize, lfsize, sfsize, samp, astar, istartbound\n   77  \n   78: namelist/run/ cfl, dtadapt, nsteps, iomod, otfavg, istartavg, mapping, blfac, ic, bctype, istartbound, samp, interpflag, forcing, fsize, lfsize, sfsize, linstab, astar, ifrz, sgsflag, ifilt, modfilt, dealiasflag\n   79  \n   80  end module runparam\n\n/home/f/Code/clean_lsbmpi/src/derivatives.f90:\n    7  contains\n    8  \n    9: subroutine zinteg(tmp,tint,n1,n2,mapping,per,rev)\n   10      ! integrates a given field tmp in the vertical direction\n   11      ! using trapezoidal rule (per=0) or Gauss quadrature (per=1)\n   12:     ! an adjustement is made for mappings with singularities\n   13      use dim\n   14      use grid\n   15      use mpicom, only: myid\n   16      ! input/output\n   17:     integer, intent(in) :: n1, n2, per, mapping, rev\n   18      real, dimension(n1,n2,nzp), intent(inout) :: tmp\n   19      real, dimension(n1,n2,nzp), intent(out) ::tint\n   ..\n   43                      tint(i,j,k) = integ\n   44                  end do\n   45:                 if (mapping==1) tint(i,j,1) = tint(i,j,2)\n   46              end do\n   47          end do        \n   ..\n   57                          tint(i,j,k-1) = integ\n   58                      end do\n   59:                     if (mapping==1) tint(i,j,1) = tint(i,j,2)\n   60                  else\n   61                      do k=2,nzp\n   ..\n   74      ! test the accuracy of vertical integration\n   75      use dim\n   76:     use runparam, only: mapping\n   77      use paral\n   78      use mpicom, only: myid\n   ..\n   92          f_exact(:,:,k) = (ubar(k)-ubar(nzp))\n   93      end do\n   94:     call zinteg(dfdz,f,nx,nypl,mapping,0,0)\n   95      avgerr = 0.0\n   96      do k=1,nzp\n\n/home/f/Code/clean_lsbmpi/src/filters.f90:\n  256      ! filter a number of quantities held in tensor q in x, y, z\n  257      use dim\n  258:     use runparam, only: mapping\n  259      use grid, only: zpts\n  260      ! i/o\n  ...\n  289      if (err /= 0) write(*,*) \"filter_q_3pt: Allocation request denied\"\n  290      if ( interpflag==1 ) then\n  291:         if ( mapping==1 .or. mapping==2 .or. mapping==22 ) then\n  292              ! use only one sided interpolating filter\n  293              do k=2,nzp-1 ! do not include last point z(1) = +infty\n  ...\n  298                  cz(k)=a*2.0*dltm*dltm/(dltp*(dltp+dltm))\n  299              end do\n  300:             if ( mapping==1 ) then\n  301                  az(2)=0.0\n  302                  bz(2)=(2.0*a+b)\n\n/home/f/Code/clean_lsbmpi/src/helmholtz.f90:\n  217      use dim\n  218      use grid\n  219:     use runparam, only: mapping, blfac\n  220      use paral, only: wbar, wbarpp\n  221      !     use mats\n  ...\n  227      real, dimension(nxpl,ny,nzpl), intent(in) :: bc\n  228      real, intent(in) :: dtnui\n  229:     !     integer, intent(in) :: mapping\n  230      real, dimension(nzpl), intent(in) :: diag\n  231      real, dimension(nzpl,nzpl), intent(in) :: smat,simat\n  ...\n  237      ! allocate vars\n  238      allocate( hbot(nzp), htop(nzp), d2hbot(nzp), d2htop(nzp) )\n  239:     ! based on mapping, compute what hbot and h2 should be:\n  240:     select case(mapping)\n  241          case(0) ! channel flow\n  242              ! linear htop, hbot\n\n/home/f/Code/clean_lsbmpi/src/init.f90:\n  184  \n  185      ! set up vertical grid\n  186:     if (debug>=2 .and. myid==0) write(*,*) 'zlen=', zlen, 'mapping=',mapping\n  187  \n  188:     select case(mapping)\n  189:         case(0) ! channel flow mapping where zlen is channel width (usually 1)\n  190              xl = zlen\n  191              do k=1,nzp\n  ...\n  213              gf(1) = 0.0! 1/infty = 0\n  214  \n  215:         case(2) ! finite algebraic mapping for boundary layer flow\n  216              xl = 1.\n  217              ! larger bb -> less pts in BL at inflow\n  ...\n  237              end do\n  238  \n  239: !         case(4) ! finite algebraic mapping for boundary layer flow\n  240  !             xl = 1.\n  241  !             ! larger bb -> less pts in BL at inflow\n  ...\n  385              blasfl_d = d*okr\n  386              blasfl_d2 = matmul(blasfl_d, blasfl_d)\n  387: !                 if (mapping==2) then\n  388  !                     do k=1,nzp\n  389  !                         blasfl_zpts(k) = bb/okr*xi(k)/(1.+bb/zlen/okr - xi(k))\n  ...\n  400  \n  401              ! account for small ceilings\n  402:     !             if (mapping>=3 .and. zpts(1) < 1.E3) alph = alph*10.0\n  403              ! solve for Blasius flow\n  404              call blasfl(eps,iter,alph,nzp,blasfl_zpts,blasfl_dor,blasfl_d,blasfl_d2,ubar,wbar)\n  ...\n  411              wbar(1) = wbar(2)\n  412              wbar(nzp) = 0.0\n  413:             !             if (mapping>=3) wbar = wbar/1.875/okr\n  414      !             if (cheb==1) then\n  415  !                 ubarp = matmul(d,ubar)\n  ...\n  576  \n  577      ! create ubar and wbar based on solution f\n  578:     !     if (mapping==1 .or. mapping==2) then\n  579      ubar = 1.0 + matmul(d,f)\n  580      wbar = 0.5*( zpts(1:nzp)*ubar(1:nzp) - (f(1:nzp) + zpts(1:nzp)) )\n\n31 matches across 6 files\n",
+			"settings":
+			{
+				"buffer_size": 5809,
+				"line_ending": "Unix",
+				"name": "Find Results",
+				"scratch": true
+			}
+		},
+		{
+			"file": "derivatives.f90",
+			"settings":
+			{
+				"buffer_size": 17222,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "filters.f90",
+			"settings":
+			{
+				"buffer_size": 20065,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "common.f90",
+			"settings":
+			{
+				"buffer_size": 7027,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "makefile",
+			"settings":
+			{
+				"buffer_size": 2365,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/home/f/Code/clean_lsbmpi/run/output.txt",
+			"settings":
+			{
+				"buffer_size": 124557,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/home/f/Code/clean_lsbmpi/run/input.dat",
+			"settings":
+			{
+				"buffer_size": 3913,
+				"line_ending": "Unix"
+			}
+		}
 	],
 	"build_system": "",
 	"command_palette":
@@ -560,34 +666,23 @@
 	},
 	"expanded_folders":
 	[
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/run"
+		"/home/f/Code/clean_lsbmpi/src",
+		"/home/f/Code/clean_lsbmpi/run"
 	],
 	"file_history":
 	[
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/run/output.txt",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/orrsomm.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/main.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/navierstokes.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/init.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/mpi_io.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/mpi_setup.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/run/input.dat",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/run/output_lintest.txt",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/io.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/modfftw.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/makefile",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/common.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/helmholtz.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/sgsterm.f90",
-		"/media/cadieux/FUSB3/code/clean_lsbmpi/src/derivatives.f90",
-		"/home/f/Code/clean_lsbmpi/run/input.dat",
-		"/home/f/Code/clean_lsbmpi/run/output.txt",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-transfer.usc.edu/home/rcf-40/cadieux/research/staging/clean_lsbmpi/src/helmholtz.f90",
+		"/home/f/Code/clean_lsbmpi/src/dealiasing.f90",
+		"/home/f/Code/clean_lsbmpi/src/derivatives.f90",
+		"/home/f/Code/clean_lsbmpi/src/mpi_io.f90",
+		"/home/f/Code/clean_lsbmpi/src/main.f90",
 		"/home/f/Code/clean_lsbmpi/src/orrsomm.f90",
+		"/home/f/Code/clean_lsbmpi/src/sgsterm.f90",
+		"/home/f/Code/clean_lsbmpi/run/input.dat",
 		"/home/f/Code/clean_lsbmpi/src/flags.mod",
 		"/home/f/Code/clean_lsbmpi/src/filters.f90",
 		"/home/f/Code/clean_lsbmpi/src/grid.mod",
 		"/home/f/Code/clean_lsbmpi/src/horfft.f90",
-		"/home/f/Code/clean_lsbmpi/src/dealiasing.f90",
 		"/home/f/Code/clean_lsbmpi/src/io.f90",
 		"/home/f/Code/clean_lsbmpi/src/modfftw.f90",
 		"/home/f/Code/opt_lsbmpi/src/mpi_io.f90",
@@ -691,11 +786,23 @@
 		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/Brian/bcode8/snormbwa.f",
 		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/Brian/bcode8/dynamicsmagbwa_interp.f",
 		"/home/f/Code/lsbmpi/src/orrsomm.f90",
-		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/sigma/input.dat"
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/sigma/input.dat",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/sigma/output.dat",
+		"/home/f/Code/lsbmpi/src/common.f90",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/sigma/lsb-sigma-debug.pbs",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/src/modfftw.f90",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/inter/input.dat",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/dynsmag/input.dat",
+		"/home/f/Code/lsbmpi/run/tau/input.dat",
+		"/home/f/.gvfs/SFTP for cadieux on hpc-login2.usc.edu/auto/rcf-40/cadieux/research/staging/hudns_interscale/run/modecut_300/output.dat",
+		"/home/f/Code/lsbmpi/run/tau/output.dat",
+		"/home/f/Code/lsbmpi/src/makefile",
+		"/home/f/Code/lsbmpi/src/iofiles.f90",
+		"/home/f/Code/lsbmpi/src/err.txt"
 	],
 	"find":
 	{
-		"height": 61.0
+		"height": 35.0
 	},
 	"find_in_files":
 	{
@@ -715,10 +822,11 @@
 		"case_sensitive": false,
 		"find_history":
 		[
-			"setup_grid",
-			"temp",
-			"setup_ic",
-			"uif(:,:,nzp,1) =",
+			"FFTW_ESTIMATE",
+			"mapping",
+			"nz>31",
+			"navierstokes_update",
+			"nlterm",
 			"navierstokes_update",
 			"xkap",
 			"nlterm_skewsym(uif, ",
@@ -841,8 +949,7 @@
 			"call rhs",
 			"duiujdxjf",
 			"uiujf",
-			"dfdz",
-			"nltermf"
+			"dfdz"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -850,6 +957,8 @@
 		"regex": false,
 		"replace_history":
 		[
+			"FFTW_MEASURE",
+			"nz>32",
 			"tnmf",
 			"",
 			"nltnmf",
@@ -975,9 +1084,7 @@
 			"(k,:)",
 			"dct_uf",
 			"dct",
-			"(1. + b*b)",
-			" -",
-			"+"
+			"(1. + b*b)"
 		],
 		"reverse": false,
 		"show_context": true,
@@ -988,8 +1095,627 @@
 	"groups":
 	[
 		{
+			"selected": 5,
 			"sheets":
 			[
+				{
+					"buffer": 0,
+					"file": "navierstokes.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 56461,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								47578,
+								47578
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 20054.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "init.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 25356,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								4936,
+								4936
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2781.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "modfftw.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4236,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2409,
+								2409
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 714.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "mpi_setup.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1544,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								46,
+								46
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 10,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "io.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 23567,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 775.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 14,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "helmholtz.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 13192,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8863,
+								8863
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 3988.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5809,
+						"regions":
+						{
+							"match":
+							{
+								"flags": 112,
+								"regions":
+								[
+									[
+										233,
+										240
+									],
+									[
+										402,
+										409
+									],
+									[
+										634,
+										641
+									],
+									[
+										889,
+										896
+									],
+									[
+										1186,
+										1193
+									],
+									[
+										1383,
+										1390
+									],
+									[
+										1557,
+										1564
+									],
+									[
+										1798,
+										1805
+									],
+									[
+										2016,
+										2023
+									],
+									[
+										2231,
+										2238
+									],
+									[
+										2408,
+										2415
+									],
+									[
+										2632,
+										2639
+									],
+									[
+										2830,
+										2837
+									],
+									[
+										2846,
+										2853
+									],
+									[
+										2862,
+										2869
+									],
+									[
+										3136,
+										3143
+									],
+									[
+										3342,
+										3349
+									],
+									[
+										3566,
+										3573
+									],
+									[
+										3816,
+										3823
+									],
+									[
+										3884,
+										3891
+									],
+									[
+										4119,
+										4126
+									],
+									[
+										4129,
+										4136
+									],
+									[
+										4168,
+										4175
+									],
+									[
+										4215,
+										4222
+									],
+									[
+										4422,
+										4429
+									],
+									[
+										4624,
+										4631
+									],
+									[
+										4875,
+										4882
+									],
+									[
+										5111,
+										5118
+									],
+									[
+										5422,
+										5429
+									],
+									[
+										5636,
+										5643
+									],
+									[
+										5652,
+										5659
+									]
+								],
+								"scope": ""
+							}
+						},
+						"selection":
+						[
+							[
+								4828,
+								4828
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "find results.hidden-tmlanguage",
+							"detect_indentation": false,
+							"line_numbers": false,
+							"output_tag": 1,
+							"result_base_dir": "",
+							"result_file_regex": "^([A-Za-z\\\\/<].*):$",
+							"result_line_regex": "^ +([0-9]+):",
+							"scroll_past_end": true,
+							"syntax": "Packages/Default/Find Results.hidden-tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 2091.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				},
+				{
+					"buffer": 7,
+					"file": "derivatives.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 17222,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								3704,
+								3704
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 1540.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 8,
+					"file": "filters.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 20065,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								10651,
+								10651
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 5144.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 8,
+					"type": "text"
+				},
+				{
+					"buffer": 9,
+					"file": "common.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 7027,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2339.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 13,
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 3,
+			"sheets":
+			[
+				{
+					"buffer": 10,
+					"file": "makefile",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2365,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1039,
+								1039
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "makefile",
+							"syntax": "Packages/Makefile/Makefile.tmLanguage",
+							"word_wrap": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 544.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 9,
+					"type": "text"
+				},
+				{
+					"buffer": 11,
+					"file": "/home/f/Code/clean_lsbmpi/run/output.txt",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 124557,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								124557,
+								124557
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "plain text",
+							"syntax": "Packages/Text/Plain text.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 28230.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "io.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 23567,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 4311.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 12,
+					"type": "text"
+				},
+				{
+					"buffer": 12,
+					"file": "/home/f/Code/clean_lsbmpi/run/input.dat",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 3913,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1630,
+								1630
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"history_list_is_closing": true,
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 0,
+					"file": "navierstokes.f90",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 56461,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								19778,
+								19778
+							]
+						],
+						"settings":
+						{
+							"WordCountShouldRun": true,
+							"WordCountSyntax": "fortran - modern",
+							"syntax": "Packages/fortran/Syntaxes/Fortran - Modern.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 19441.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 11,
+					"type": "text"
+				}
 			]
 		}
 	],
@@ -1010,11 +1736,18 @@
 				0,
 				1,
 				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
 			]
 		],
 		"cols":
 		[
 			0.0,
+			0.5,
 			1.0
 		],
 		"rows":
@@ -1040,36 +1773,24 @@
 		"selected_items":
 		[
 			[
-				"out",
-				"run/output_lintest.txt"
+				"deri",
+				"src/derivatives.f90"
 			],
 			[
-				"or",
-				"src/orrsomm.f90"
+				"",
+				"src/helmholtz.f90"
 			],
 			[
-				"main",
-				"src/main.f90"
+				"mpis",
+				"src/mpi_setup.f90"
 			],
 			[
-				"mpi",
-				"src/mpi_io.f90"
+				"modff",
+				"src/modfftw.f90"
 			],
 			[
 				"init",
 				"src/init.f90"
-			],
-			[
-				"m",
-				"src/main.f90"
-			],
-			[
-				"input",
-				"run/input.dat"
-			],
-			[
-				"navie",
-				"src/navierstokes.f90"
 			],
 			[
 				"io",
@@ -1084,6 +1805,10 @@
 				"src/navierstokes.f90"
 			],
 			[
+				"out",
+				"run/output.txt"
+			],
+			[
 				"sgs",
 				"src/sgsterm.f90"
 			],
@@ -1092,8 +1817,8 @@
 				"src/helmholtz.f90"
 			],
 			[
-				"deri",
-				"src/derivatives.f90"
+				"or",
+				"src/orrsomm.f90"
 			],
 			[
 				"comm",
@@ -1102,6 +1827,10 @@
 			[
 				"navi",
 				"src/navierstokes.f90"
+			],
+			[
+				"main",
+				"src/main.f90"
 			],
 			[
 				"inp",
@@ -1128,6 +1857,10 @@
 				"src/navierstokes.f90"
 			],
 			[
+				"mpi",
+				"src/mpi_io.f90"
+			],
+			[
 				"sgstr",
 				"src/sgsterm.f90"
 			],
@@ -1150,6 +1883,10 @@
 			[
 				"smag",
 				"src/smag.f90"
+			],
+			[
+				"input",
+				"run/input.dat"
 			],
 			[
 				"deriv",
@@ -1234,10 +1971,6 @@
 			[
 				"modf",
 				"src/modfftw.f03"
-			],
-			[
-				"",
-				"src/chebyshev.f03"
 			],
 			[
 				"cheb",
@@ -1582,7 +2315,7 @@
 	"show_open_files": false,
 	"show_tabs": true,
 	"side_bar_visible": true,
-	"side_bar_width": 186.0,
+	"side_bar_width": 143.0,
 	"status_bar_visible": true,
 	"template_settings":
 	{

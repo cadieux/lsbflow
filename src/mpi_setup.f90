@@ -1,8 +1,8 @@
 module mpicom
-! use mpi
+use mpi
 
 implicit none
-include 'mpif.h'
+! include 'mpif.h'
 public
 save
 

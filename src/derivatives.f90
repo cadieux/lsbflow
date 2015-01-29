@@ -119,7 +119,7 @@ subroutine dfdz(uf,dudzf)
     ! vars
     integer :: i,j
 
-    if (nz>32) then
+    if (nz>31) then
         call dct_diff(nxpl,ny,nzp,uf,dudzf,1)
     else
         do j=1,ny
@@ -143,7 +143,7 @@ subroutine dpdz(n1,n2,n,u,dudz,p)
     ! vars
     integer :: i,j,l
 
-    if (n>32) then
+    if (n>31) then
         call dct_diff(n1,n2,n,u,dudz,p)
     else
         do j=1,n2
@@ -172,7 +172,7 @@ subroutine d2fdz2(uf,dudz2f)
     allocate(dudzf(nxpl,ny,nzpl), stat=err)
     if (err /= 0) print *, "dudzf: Allocation request denied"
     
-    if (nz>32) then
+    if (nz>31) then
         call dct_diff(nxpl,ny,nzp,uf,dudz2f,2)
     else
         do j=1,ny
@@ -385,7 +385,7 @@ subroutine divcheck(uf,vf,wf,diverr)
     !     end do
 
     if (myid==0) write(*,'(//,A,G14.6,A,G14.6,A,G14.6)') 'divergence avg error =', diverr, ', at t=',t,', and dt=',dt
-    if (myid==0 .and. debug>=2) write(*,fm1) (divp(1:nx,1,k),k=1,nzp)
+    if (myid==0 .and. debug>=2) write(*,fm1) (divp(1:nx,1,k),k=1,nzp,nz)
 
     deallocate(divf,divp,dudxf,dvdyf,dwdzf)
 

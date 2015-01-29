@@ -339,17 +339,20 @@ subroutine setup_ic()
             rotz=rot
             gradt = (thigh-tlow)/zlen 
             re = x0*u0/xnu
-            do k = 1, nzp
-                tbar(k) = thigh - gradt*zpts(k)
-!                 tbarp(k) = gradt
-                ! test temp initial condition
-!                 temp(:,:,k) = 0.5*(thigh-tlow)*sin(2.0*pi*zpts(k)/zlen)*exp(-zpts(k))
-            end do
-            call dpdz(1,1,nzp,tbar,tbarp,1)
-            call dpdz(1,1,nzp,tbar,tbarpp,2)
+!             do k = 1, nzp
+!                 tbar(k) = thigh - gradt*zpts(k)
+! !                 tbarp(k) = gradt
+!                 ! test temp initial condition
+! !                 temp(:,:,k) = 0.5*(thigh-tlow)*sin(2.0*pi*zpts(k)/zlen)*exp(-zpts(k))
+!             end do
+!             call dpdz(1,1,nzp,tbar,tbarp,1)
+!             call dpdz(1,1,nzp,tbar,tbarpp,2)
 !             do i = 1, nx
 !                 temp(i,:,:) = temp(i,:,:)*sin(10.0*pi*xpts(i)/xlen)
 !             end do
+            tbar = 0.0
+            tbarp = 0.0
+            tbarpp = 0.0
 
             ! use  Von Karman-Pohlhausen approximate Blasius soln
             ! for ubar - only use if blasfl won't converge
@@ -479,6 +482,8 @@ subroutine setup_ic()
     tnmf = 0.0
     nltnf = 0.0
     nltnmf = 0.0
+    pf = 0.0
+    pnf = 0.0
 
     deallocate( u, v, w, temp, stat=AllocateStatus )
     if (AllocateStatus /= 0) then

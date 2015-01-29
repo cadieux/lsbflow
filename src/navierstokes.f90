@@ -35,8 +35,8 @@ subroutine timestep()
     end if
 
     ! complete time step update    
-!     call navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, tempf, tnf, tnmf, nltnf, nltnmf)
-    call nl_visc_press_update_zh(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf,  sgsflag)
+    call navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, tempf, tnf, tnmf, nltnf, nltnmf)
+!     call nl_visc_press_update_zh(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf,  sgsflag)
     
     if(myid==0 .and. debug>=2) write(*,*) "N-S update successful" 
 
@@ -243,7 +243,7 @@ subroutine bound(bcf,amp)
         xwidth = 0.24*h
         amp = samp*u0/(0.24*sqrt(pi))!*1.25
 !         bamp = amp/1.5 ! use for e^(x^2) bell curve inflow
-        bamp = 0.3 !0.3/(0.5*fsize*xlen/h) ! use for square wave input using Henningson fcn
+        bamp = samp/2.25 !0.3/(0.5*fsize*xlen/h) ! use for square wave input using Henningson fcn
 
         ref_time = xlen/u0*4. !xlen/u0*4.
         if ( t - istartbound <= ref_time ) then
@@ -259,8 +259,8 @@ subroutine bound(bcf,amp)
   
 !         bwidth = 0.35*fsize*xlen ! use 20 points to smooth to expected value
         bwidth = xwidth*2.25
-!         x1 = xpts(nx) - 2.*bwidth
-        x1 = xpts(nx)  - (0.75*fsize*xlen) ! - 0.2*fsize*xlen
+        x1 = xpts(nx) - 2.*bwidth
+!         x1 = xpts(nx)  - (0.75*fsize*xlen) ! - 0.2*fsize*xlen
 !         x2 = xpts(nx) - xlen*1.1/10.
 !         x2 = xpts(nx)  - fsize*xlen - 2.*xwidth !xpts(nx)  - bwidth ! - 0.2*fsize*xlen ! - lfsize*xlen*(1.-1./2.25)
 
@@ -693,24 +693,11 @@ subroutine nlterm_skewsym(uif, tempf, nltermif, nltempf, sgsflag)
     dhijdxjf = 0.0
 
     nltemp = 0.0
+    nltempf = 0.0
     temp = 0.0
     dtdxif = 0.0
     dtdxi = 0.0
 
-
-    ! if non-zero temperature, compute derivatives
-    if ( any( abs(tempf)>0.0 ) ) then
-        ! compute all dT/dx_i
-        call dfdx(tempf(:,:,:),dtdxif(:,:,:,1))
-        call dfdy(tempf(:,:,:),dtdxif(:,:,:,2))
-        call dfdz(tempf(:,:,:),dtdxif(:,:,:,3))
-        ! bring all derivatives to physical space
-        do l = 1, nq
-            call horfft(dtdxi(:,:,:,l),dtdxif(:,:,:,l),1)
-        end do
-        ! bring temp to physical space
-        call horfft(temp,tempf,1)
-    end if
 
 
     ! compute derivatives duidxjf
@@ -734,9 +721,6 @@ subroutine nlterm_skewsym(uif, tempf, nltermif, nltempf, sgsflag)
         ! add base inflow velocity and derivative
         ui(:,:,k,1) = ui(:,:,k,1) + ubar(k)
         duidxj(:,:,k,1,3) = duidxj(:,:,k,1,3) + ubarp(k)
-        ! add base temperature and derivative
-        temp(:,:,k) = temp(:,:,k) + tbar(k)
-        dtdxi(:,:,:,3) = dtdxi(:,:,:,3) + tbarp(k)
     end do
 
     ! velocity convection form u_j du_i/dx_j and u_i u_j
@@ -756,22 +740,6 @@ subroutine nlterm_skewsym(uif, tempf, nltermif, nltempf, sgsflag)
             end if
         end do
     end do
-
-
-    ! temperature convection form and u_iT
-    do l = 1, nq
-        if ( dealiasflag==1 ) then
-            ! reuse ujduidxj = u_i dt/dx_i
-            call dealiasing_2d_fftw( ui(:,:,:,l), dtdxi(:,:,:,l), ujduidxj(:,:,:,l,1) )
-            nltemp = nltemp - 0.5*ujduidxj(:,:,:,l,1)
-            ! uiuj
-            call dealiasing_2d_fftw( ui(:,:,:,l), temp, uitemp(:,:,:,l) )
-        else
-            nltemp = nltemp - 0.5*ui(:,:,:,l)*dtdxi(:,:,:,l)
-            uitemp(:,:,:,l) = ui(:,:,:,l)*temp
-        end if
-    end do
-
 
     ! compute sponge terms
     if ( forcing==1 ) then
@@ -824,6 +792,38 @@ subroutine nlterm_skewsym(uif, tempf, nltermif, nltempf, sgsflag)
     ! non-linear vel term has been computed in skew-symmetric form with full velocity
     ! now update each velocity in time according to time integration scheme
 
+    ! if non-zero temperature, compute derivatives
+    if ( any( abs(tempf)>0.0 ) ) then
+        ! compute all dT/dx_i
+        call dfdx(tempf(:,:,:),dtdxif(:,:,:,1))
+        call dfdy(tempf(:,:,:),dtdxif(:,:,:,2))
+        call dfdz(tempf(:,:,:),dtdxif(:,:,:,3))
+        ! bring all derivatives to physical space
+        do l = 1, nq
+            call horfft(dtdxi(:,:,:,l),dtdxif(:,:,:,l),1)
+        end do
+        ! bring temp to physical space
+        call horfft(temp,tempf,1)
+    end if
+
+    ! add base temperature and derivative
+    do k = 1, nzp
+        temp(:,:,k) = temp(:,:,k) + tbar(k)
+        dtdxi(:,:,:,3) = dtdxi(:,:,:,3) + tbarp(k)
+    end do
+    ! temperature convection form and u_iT
+    do l = 1, nq
+        if ( dealiasflag==1 ) then
+            ! reuse ujduidxj = u_i dt/dx_i
+            call dealiasing_2d_fftw( ui(:,:,:,l), dtdxi(:,:,:,l), ujduidxj(:,:,:,l,1) )
+            nltemp = nltemp - 0.5*ujduidxj(:,:,:,l,1)
+            ! uiuj
+            call dealiasing_2d_fftw( ui(:,:,:,l), temp, uitemp(:,:,:,l) )
+        else
+            nltemp = nltemp - 0.5*ui(:,:,:,l)*dtdxi(:,:,:,l)
+            uitemp(:,:,:,l) = ui(:,:,:,l)*temp
+        end if
+    end do
 
     ! take temperature terms to spectral space
     call horfft(nltemp,nltempf,-1)
@@ -935,7 +935,7 @@ subroutine nl_visc_press_update_zh(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, p
     ! get BDF3 coefficients
     if (istep<=3 .or. dt/=dt2 .or. dt2/=dt3) call bdfcoef(nstart,istep,dt,dt2,dt3,bdf,bdfv)
 
-    if ( istep>3 .and. (dt/=dt2 .or. dt2/=dt3) ) write(*,*) 'bdfv =', bdfv, 'bdf =', bdf
+    if ( istep>3 .and. myid==0 .and. (dt/=dt2 .or. dt2/=dt3) ) write(*,*) 'bdfv =', bdfv, 'bdf =', bdf
 
     
     
@@ -1168,6 +1168,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
     use filters
     use sgsinput, only: a,b
     ! to remove
+    use paral, only: ubar
     use mpicom, only: myid
     use flags, only: debug
     use io
@@ -1206,7 +1207,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
     ! sharp spectral filter instead of dealiasing before nonlinear evaluation
     if ( dealiasflag>=2 ) then
         call filterqspec(uif,nq)
-        call filterqspec(tempsf,1)
+        if ( any(abs(tempsf)>1.0E-10) ) call filterqspec(tempsf,1)
         if(myid==0 .and. debug>=2) write(*,*) "dealias filter successful"
     end if
 
@@ -1235,7 +1236,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
 
     ! get BDF3 coefficients
     if (istep<=3 .or. dt/=dt2 .or. dt2/=dt3) call bdfcoef(nstart,istep,dt,dt2,dt3,bdf,bdfv)
-    if ( debug>=1 .and. istep>3 .and. (dt/=dt2 .or. dt2/=dt3) ) write(*,*) 'bdfv =', bdfv, 'bdf =', bdf
+    if ( debug>=1 .and. myid==0 .and. istep>3 .and. (dt/=dt2 .or. dt2/=dt3) ) write(*,*) 'bdfv =', bdfv, 'bdf =', bdf
 
 
 
@@ -1298,6 +1299,12 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
 
     if(myid==0 .and. debug>=2) write(*,*) "RHS vel successful" 
 
+    ! relegate n-1 to n-2 level
+    nlnmif = nlnif
+    unmif = unif
+    ! relegate n to n-1 level
+    nlnif = tmp
+    unif = uif
 
     !!!!!!!!!!!!!!!!!!!! BCs for viscous-nonlinear step !!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1322,6 +1329,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
     call dfdx(psf,dpf)
 !     uif(:,:,1,1) = uif(:,:,2,1)
 !     uif(:,:,1,1) = dt*bdfv*dpf(:,:,1)
+!     uif(:,:,nzp,1) = dt*bdfv*dpf(:,:,nzp)
     uif(:,:,nzp,1) = dt*bdfv*dpf(:,:,nzp)
     ! D^2(u,v) -> 0 at top free flow
     do j = 1, ny
@@ -1342,7 +1350,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
     uif(:,:,nzp,2) = 0.0
 
     ! Zang-Hussaini BC for w* = dt*nu*bdfv*d^2w^n/dz^2
-    call d2fdz2(wf,dwdzf)
+        call d2fdz2(uif(:,:,:,3),dwdzf)    
     ! try w(H) = dt*bdfv*dp/dz(H) which is supposedly unstable
 !     call dfdz(psf,dpf)
     if ( (bctype>0 .and. t>=istartbound) ) then
@@ -1361,6 +1369,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
 !         uif(:,:,nzp,3) = dt*bdfv*dpf(:,:,nzp)
     end if
 
+
     if(myid==0 .and. debug>=2) write(*,*) "vel BC's successful" 
 
     !!!!!!!!!!!!!!!!!!!! Solve viscous-nonlinear Helmholtz eqns !!!!!!!!!!!!!!!!!!!!!!!
@@ -1374,17 +1383,14 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
         end if
     end do
     
-    ! relegate n-1 to n-2 level
-    nlnmif = nlnif
-    unmif = unif
-    ! relegate n to n-1 level
-    nlnif = tmp
-    unif = uif
+    
 !     uif = rhsf
     ! update velocities
     uf = rhsf(:,:,:,1)
     vf = rhsf(:,:,:,2)
     wf = rhsf(:,:,:,3)
+
+    rhsf = 0.0
 
     if(myid==0 .and. debug>=2) write(*,*) "vel Helmholtz successful" 
     
@@ -1392,11 +1398,11 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
 
     ! form RHS of: (D^2-k^2)w^n+1 = -D(ikx u* + iky v*)^n - k^2 w*^n
     ! calc d/dz(ikx u +    ikyv)
-!     call dfdz(uf,dpf)
-!     call dfdz(vf,dwdzf)
-!     call divuv(dpf,dwdzf,divdzf)
+    call dfdz(uf,dpf)
+    call dfdz(vf,dwdzf)
+    call divuv(dpf,dwdzf,divdzf)
     call divuv(uf,vf,divf) ! divf = ikx u + iky v
-    call dfdz(divf,divdzf) ! divdzf = D[ikx u + iky v]
+!     call dfdz(divf,divdzf) ! divdzf = D[ikx u + iky v]
     ! ozf = -D[ikx u + iky v] - k^2 w
     do j=1,ny
         do i=1,nxpl
@@ -1443,11 +1449,7 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
     
     ! Solve poisson equation for w^n+1
     ! (D^2-k^2)w^n+1 = -D(ikx u + iky v)^n - k^2 w^n
-    if ( bctype>0 .and. t>=istartbound ) then
-        call solve_nhom_helmholtz(rhsf(:,:,:,3),wf,0.0,diag,smat,simat)
-    else
-        call solve_helmholtz(rhsf(:,:,:,i),0.0,nzm,diag,smat,simat)
-    end if
+    call solve_nhom_helmholtz(rhsf(:,:,:,3),wf,0.0,diag,smat,simat)
 
     wf = rhsf(:,:,:,3)
     ! phi*dt*bdfv = -[Dw^n+1 + ikx u^n + iky v^n]/k^2
