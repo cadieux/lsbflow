@@ -380,10 +380,12 @@ subroutine filtery_q_3pt(q,q_filt,n4,n5,a,b)
     q_hat(:,1:nypl,:,:,:)=q
 
     ! filter interior values
-    do j=2,nypl-1
-        q_filt(:,j,:,:,:)=a*q_hat(:,j-1,:,:,:)+b*q_hat(:,j,:,:,:)+a*q_hat(:,j+1,:,:,:)
-        q_filt(:,j,:,:,:)=q_filt(:,j,:,:,:)/(2.00*a+b)
-    end do
+    if (nypl>2) then
+        do j=2,nypl-1
+            q_filt(:,j,:,:,:)=a*q_hat(:,j-1,:,:,:)+b*q_hat(:,j,:,:,:)+a*q_hat(:,j+1,:,:,:)
+            q_filt(:,j,:,:,:)=q_filt(:,j,:,:,:)/(2.00*a+b)
+        end do
+    end if
 
     if ( debug>=2 .and. myid==0 ) write(*,*) "filtery_q_3pt y interior filter completed"
 
@@ -405,7 +407,8 @@ subroutine filtery_q_3pt(q,q_filt,n4,n5,a,b)
             ! set some tags to keep track of things
             tagout = 1000 + myid
             
-            buf2 = q_hat(1:nx,nypl,1:nzp,1:n4,1:n5)
+            buf2 = q_hat(1:nx,1,1:nzp,1:n4,1:n5)
+!             buf2 = q_hat(1:nx,nypl,1:nzp,1:n4,1:n5)
             if ( debug>=2  ) write(*,*) "filtery_q_3pt just before EVEN SEND 2 from",myid,"to",dest2
             call mpi_send(buf2,bufsize,mpi_double_precision,dest2,tagout,comm,ierr)
             if ( debug>=2 .and. ierr==0 ) write(*,*) "filtery_q_3pt EVEN proc SEND 2 completed for proc = ",myid
@@ -483,10 +486,18 @@ subroutine filtery_q_3pt(q,q_filt,n4,n5,a,b)
     end if
         
     ! compute filtered boundary values (j=1, and j=nypl)
-    do j=1,nypl,nypl-1
-        q_filt(:,j,:,:,:)=a*q_hat(:,j-1,:,:,:)+b*q_hat(:,j,:,:,:)+a*q_hat(:,j+1,:,:,:)
-        q_filt(:,j,:,:,:)=q_filt(:,j,:,:,:)/(2.00*a+b)
-    enddo
+    if (nypl>2) then
+        do j=1,nypl,nypl-1
+            q_filt(:,j,:,:,:)=a*q_hat(:,j-1,:,:,:)+b*q_hat(:,j,:,:,:)+a*q_hat(:,j+1,:,:,:)
+            q_filt(:,j,:,:,:)=q_filt(:,j,:,:,:)/(2.00*a+b)
+        enddo
+    else if (nypl<=2) then
+        do j=1,nypl
+            q_filt(:,j,:,:,:)=a*q_hat(:,j-1,:,:,:)+b*q_hat(:,j,:,:,:)+a*q_hat(:,j+1,:,:,:)
+            q_filt(:,j,:,:,:)=q_filt(:,j,:,:,:)/(2.00*a+b)
+        enddo
+    end if
+
 
     if (allocated(q_hat)) deallocate(q_hat, buf1, buf2, stat=err)
     if (err /= 0) print *, "filtery_q_3pt: Deallocation request denied"
