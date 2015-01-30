@@ -251,7 +251,7 @@ subroutine dynamic_smagorinsky(ui, uiuj, duidxj, tauij)
                 ctot(i,j,k) = ctot(i,j,k) / cd(i,j,k)
                 ! clip negative values
                 if ( ctot(i,j,k)<0.0 .or. isnan( ctot(i,j,k) ) ) ctot(i,j,k) = 0.0 
-                if ( ctot(i,j,k)>0.2 ) ctot(i,j,k) = 0.2 ! clip values above 0.2
+                if ( ctot(i,j,k)>0.2**2 ) ctot(i,j,k) = 0.2**2 ! clip values above 0.2
             end do
         end do
     end do
@@ -308,13 +308,6 @@ subroutine sigma_model(duidxj, tauij)
 
     nq = 3
 
-    ! let tauij = S_ij
-    do m = 1, nq
-        do l = 1, nq
-            tauij(:,:,:,l,m) = 0.5*( duidxj(:,:,:,l,m) + duidxj(:,:,:,m,l) )
-        end do
-    end do
-
     pi = 4.*atan(1.)
 
     eps = 1.E-10
@@ -322,6 +315,7 @@ subroutine sigma_model(duidxj, tauij)
     C_sigma = 1.35 ! parameter from Nicoud et al.
 
     tauij = 0.0
+    nu_sgs = 0.0
 
     do k = 1, nzp
         do j = 1, nypl
@@ -379,7 +373,7 @@ subroutine sigma_model(duidxj, tauij)
                     dz = 0.5*(zpts(k-1)-zpts(k+1))
                 end if
 
-                delta = (dx*dy*dz)**(2./3.)      
+                delta = (dx*dy*dz)**(1./3.)      
 
 !                 if(myid==0 .and. debug>=2 .and. mod(istep,iomod)==0) then
                 if (D_sigma<-1.E-10 .or. isnan(D_sigma)) then
@@ -404,7 +398,7 @@ subroutine sigma_model(duidxj, tauij)
                 if (D_sigma<0.0 .or. isnan(D_sigma)) D_sigma = 0.0
 
                 ! compute nu_sgs = (C*delta)^2 D_sigma
-                nu_sgs(i,j,k) = (C_sigma*delta)**2*D_sigma 
+                nu_sgs(i,j,k) = -(C_sigma*delta)**2*D_sigma 
 
             end do
         end do
@@ -419,7 +413,7 @@ subroutine sigma_model(duidxj, tauij)
     ! tau_ij = -2*nu*S_ij
     do m = 1, nq
         do l = 1, nq
-            tauij(:,:,:,l,m) = -2.0*nu_sgs*tauij(:,:,:,l,m)
+            tauij(:,:,:,l,m) = 2.0*nu_sgs*0.5*( duidxj(:,:,:,l,m) + duidxj(:,:,:,m,l) )
         end do
     end do
 
