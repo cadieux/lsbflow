@@ -6,7 +6,7 @@ save
 
 contains
 
-subroutine filterall3pt(uf,vf,wf)
+subroutine filterall3pt(uf,vf,wf,tempf,pf)
     ! filter all primary qties
     use dim
     use runparam, only: iomod
@@ -18,23 +18,28 @@ subroutine filterall3pt(uf,vf,wf)
     use mpicom, only: myid
     use formatstrings
     ! i/o
-    real, dimension(nxpl,ny,nzpl), intent(inout) :: uf,vf,wf
+    real, dimension(nxpl,ny,nzpl), intent(inout) :: uf, vf, wf, tempf, pf
     ! local vars
-    integer :: err, k, nvel, l
+    integer :: err, nvel!, l, k
     real, allocatable, dimension(:,:,:,:) :: q, qfilt
-    nvel = 3
+    nvel = 5
     if (.not. allocated(q)) allocate(q(nxpp,nypl,nzp,nvel), qfilt(nxpp,nypl,nzp,nvel), stat=err)
     if (err /= 0) write(*,*) "filterall3pt: Allocation request denied" 
     ! transfer all qties to physical space
+    q = 0.0
     call horfft(q(:,:,:,1),uf,1)
     call horfft(q(:,:,:,2),vf,1)
     call horfft(q(:,:,:,3),wf,1)
+    call horfft(q(:,:,:,4),pf,1)
+    if(any(abs(tempf)>1.0E-10)) call horfft(q(:,:,:,5),tempf,1)
 
-    call modecutFC(q,qfilt,a,b)
+    call modecutFC(q,qfilt,nvel,a,b)
 
     call horfft(qfilt(:,:,:,1),uf,-1)
     call horfft(qfilt(:,:,:,2),vf,-1)
     call horfft(qfilt(:,:,:,3),wf,-1)
+    call horfft(qfilt(:,:,:,4),pf,-1)
+    if(any(abs(tempf)>1.0E-10)) call horfft(qfilt(:,:,:,5),tempf,-1)
 !     call horfft(dynp_filt,pf,-1)
 !     if (debug>=1 .and. myid==0) write(*,*) 'filter: transfer back to fourier space completed successfully'
     ! compute energy removed
@@ -52,6 +57,109 @@ subroutine filterall3pt(uf,vf,wf)
     if (err /= 0) write(*,*) "filterall3pt: Deallocation request denied"
 
 end subroutine filterall3pt
+
+
+subroutine tns_automatic_filtering(uf,vf,wf,tempf,pf)
+    ! compute energy difference between two filtering levels
+    ! <I(h)/I(Delta)>(z) = < [(u - ub1)**2 + (v - vb1)**2 + (w - wb1)**2]/[(u - ub2)**2 + (v - vb2)**2 + (w - wb2)**2] >
+    ! <I(h)/I(Delta)> = int_z <I(h)/I(Delta)>(z) from z=0 to z=H
+    use dim
+    use runparam, only: iomod
+    use time, only: isum, t
+    use sgsinput
+    use modhorfft
+    use grid, only: zpts, dz
+    ! to remove
+    use flags, only: debug
+    use mpicom
+    use formatstrings
+    ! i/o
+    real, dimension(nxpl,ny,nzpl), intent(inout) :: uf, vf, wf, tempf, pf
+    ! local vars
+    integer :: err, k, nq, nvel, l
+    real, allocatable, dimension(:,:,:,:) :: q, qfilt, qfilt_2kc
+    real, allocatable, dimension(:,:) :: energy
+    real :: Ih, Idelta, ekin_ratio_limit
+    nq = 4
+    nvel = 3
+    if (.not. allocated(q)) allocate(q(nxpp,nypl,nzp,nq), qfilt(nxpp,nypl,nzp,nq), qfilt_2kc(nxpp,nypl,nzp,nq), energy(nzp,4), stat=err)
+    if (err /= 0) write(*,*) "tns_automatic_filtering: Allocation request denied"
+
+    ! set appropriate energy ratio maximum
+    ekin_ratio_limit = 0.007 ! as per Tantikul, Domaradzki. J turb, 2011
+
+    ! transfer all qties to physical space
+    q = 0.0
+    call horfft(q(:,:,:,1),uf,1)
+    call horfft(q(:,:,:,2),vf,1)
+    call horfft(q(:,:,:,3),wf,1)
+    call horfft(q(:,:,:,4),pf,1)
+!     if(any(abs(tempf)>1.0E-10)) call horfft(q(:,:,:,5),tempf,1)
+
+    call modecutFC(q,qfilt_2kc,nq,1.0,6.0) ! 1/8 3/4 1/8 sharper filter
+!     call modecutFC(q,qfilt_2kc,nq,1.0,9.0) ! 1/8 3/4 1/8 sharper filter
+
+    call modecutFC(q,qfilt,nq,1.0,2.0) ! 1/4 1/2 1/4 trapezoidal filter
+!     call modecutFC(q,qfilt,nq,1.0,4.0) ! 1/6 2/3 1/6 simpson's filter
+!     call modecutFC(q,qfilt,nq,1.0,3.0) ! 1/5 3/5 1/5 in between filter
+
+    ! compute energy difference averaged over planes
+    energy = 0.0
+    do k = 1, nzp
+!         energy(k,:) = 0.0
+        do l = 1, nvel
+            energy(k,1) = energy(k,1) + sum( (q(:,:,k,l) - qfilt(:,:,k,l))**2 )/(ny*nx)
+            energy(k,2) = energy(k,2) + sum( (q(:,:,k,l) - qfilt_2kc(:,:,k,l))**2 )/(ny*nx)         
+        end do
+    end do
+    ! add up each section in y-direction
+    call mpi_allreduce(energy(:,1:2),energy(:,3:4),2*nzp,mpi_double_precision,MPI_SUM,comm,ierr)
+    ! compute integral in vertical
+    Ih = 0.0
+    Idelta = 0.0
+    do k = nz, 1, -1
+        dz = (zpts(k) - zpts(k+1))
+        Ih = Ih + 0.5*(energy(k,4) + energy(k+1,4))*dz
+        Idelta = Idelta + 0.5*(energy(k,3) + energy(k+1,3))*dz
+    end do
+
+    if (debug>=2 .and. myid==0) then
+        write(*,'(A,G12.4)') "TNS: <I(h)>          =",Ih
+        write(*,'(A,G12.4)') "TNS: <I(delta)>      =",Idelta
+        write(*,'(A,F12.4)') "TNS: <I(h)/I(delta)> =",Ih/Idelta
+    end if
+
+
+    if (Ih/Idelta > ekin_ratio_limit) then
+        call horfft(qfilt_2kc(:,:,:,1),uf,-1)
+        call horfft(qfilt_2kc(:,:,:,2),vf,-1)
+        call horfft(qfilt_2kc(:,:,:,3),wf,-1)
+        call horfft(qfilt_2kc(:,:,:,4),pf,-1)
+!         call modecutFC(q,qfilt,nq,1.0,4.0) ! use sharper filter in between
+!         call horfft(qfilt(:,:,:,1),uf,-1)
+!         call horfft(qfilt(:,:,:,2),vf,-1)
+!         call horfft(qfilt(:,:,:,3),wf,-1)
+!         call horfft(qfilt(:,:,:,4),pf,-1)
+!         if(any(abs(tempf)>1.0E-10)) call horfft(qfilt(:,:,:,5),tempf,-1)
+        if (myid == 0 .and. debug>=1) then
+            write(*,'(A,G12.4)') "TNS: <I(h)>          =",Ih
+            write(*,'(A,G12.4)') "TNS: <I(delta)>      =",Idelta
+            write(*,'(A,F12.4)') "TNS: <I(h)/I(delta)> =",Ih/Idelta
+            write(*,'(A,F14.6,A,I14.6,/)') "TNS: filtering applied at time=",t,", it # =", isum
+        end if
+!     else
+!         call horfft(qfilt_2kc(:,:,:,1),uf,-1)
+!         call horfft(qfilt_2kc(:,:,:,2),vf,-1)
+!         call horfft(qfilt_2kc(:,:,:,3),wf,-1)
+!         call horfft(qfilt_2kc(:,:,:,4),pf,-1)
+    end if
+
+
+    if (allocated(q)) deallocate(q, qfilt, qfilt_2kc, energy, stat=err)
+    if (err /= 0) write(*,*) "tns_automatic_filtering: Deallocation request denied"
+
+end subroutine tns_automatic_filtering
+
 
 subroutine filterqspec(qf,nq)
     ! filter all primary qties
@@ -506,20 +614,21 @@ end subroutine filtery_q_3pt
 
 
 
-subroutine modecutFC(q,qb,a,b)
+subroutine modecutFC(q,qb,nq,a,b)
     ! This routine obtain large component of the full velocity field by special
     ! filtering.
     use dim
     ! i/o
+    integer, intent(in) :: nq
     real, intent(in) :: a, b
-    real, dimension(nxpp,nypl,nzpl,3), intent(in) :: q
-    real, dimension(nxpp,nypl,nzpl,3), intent(out) :: qb
+    real, dimension(nxpp,nypl,nzpl,nq), intent(in) :: q
+    real, dimension(nxpp,nypl,nzpl,nq), intent(out) :: qb
     ! local vars
     integer :: AllocateStatus, l, nfilt, nvel
     real, dimension(:,:,:,:,:), allocatable :: q_filt
     real, dimension(:), allocatable :: coef
 
-    nvel = 3
+    nvel = nq
     nfilt = 6
     allocate(q_filt(nxpp,nypl,nzpl,nvel,nfilt), coef(nfilt), stat=AllocateStatus)
     if(AllocateStatus/=0) then

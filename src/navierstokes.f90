@@ -22,6 +22,7 @@ subroutine timestep()
     use filters
     use derivatives
     use modhorfft
+    use sgsinput, only: sgsmodel
     ! to remove after debugging
     use io
     use mpicom!, only: myid, ierr
@@ -30,8 +31,12 @@ subroutine timestep()
 
     ! physical filtering for Truncated Navier-Stokes approach
     if ( ifilt>=1 .and. mod(istep,modfilt)==0 ) then
-        call filterall3pt(uf,vf,wf)
+        if (sgsflag==1 .and. sgsmodel==4) then
+            call tns_automatic_filtering(uf,vf,wf,tempf,pf)
+        else
+            call filterall3pt(uf,vf,wf,tempf,pf)
 !         call filterallspec(uf,vf,wf,0)
+        end if
     end if
 
     ! complete time step update    
@@ -245,7 +250,7 @@ subroutine bound(bcf,amp)
 !         bamp = amp/1.5 ! use for e^(x^2) bell curve inflow
         bamp = samp/2.25 !0.3/(0.5*fsize*xlen/h) ! use for square wave input using Henningson fcn
 
-        ref_time = xlen/u0*4. !xlen/u0*4.
+        ref_time = xlen/u0!*2. !xlen/u0*4.
         if ( t - istartbound <= ref_time ) then
             amp = amp*sin( 0.5*pi*(t - istartbound)/ref_time )**2.0
             bamp = bamp*sin( 0.5*pi*(t - istartbound)/ref_time )**2.0
@@ -1336,18 +1341,10 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
         do i = 1, nxpl
             wav2 = wavxx(i)+wavyy(j)
 !             uif(i,j,1,:) = -rhsf(i,j,1,:) / ( wav2 + dtnui/bdfv )
-!             uif(i,j,1,1:2) = -rhsf(i,j,1,1:2) / ( wav2 + dtnui/bdfv )
-            uif(i,j,1,1) = -rhsf(i,j,1,1) / ( wav2 + dtnui/bdfv )
+            uif(i,j,1,1:2) = -rhsf(i,j,1,1:2) / ( wav2 + dtnui/bdfv )
+!             uif(i,j,1,1) = -rhsf(i,j,1,1) / ( wav2 + dtnui/bdfv )
         end do
     end do
-
-    ! Zang-Hussaini BC for v* = dt*bdfv*dp^n/dy
-    ! take d(p*)/dy
-!     call dfdy(psf,dpf)
-!     uif(:,:,1,2) = dt*bdfv*dpf(:,:,1)
-!     uif(:,:,nzp,2) = dt*bdfv*dpf(:,:,nzp)
-    uif(:,:,1,2) = 0.0
-    uif(:,:,nzp,2) = 0.0
 
     ! Zang-Hussaini BC for w* = dt*nu*bdfv*d^2w^n/dz^2
         call d2fdz2(uif(:,:,:,3),dwdzf)    
@@ -1368,6 +1365,19 @@ subroutine navierstokes_update(uf, vf, wf, unif, unmif, nlnif, nlnmif, pf, pnf, 
 !         uif(:,:,1,3) = dt*bdfv*dpf(:,:,1)
 !         uif(:,:,nzp,3) = dt*bdfv*dpf(:,:,nzp)
     end if
+
+    ! Zang-Hussaini BC for v* = dt*bdfv*dp^n/dy
+    ! take d(p*)/dy
+    call dfdy(psf,dpf)
+!     uif(:,:,1,2) = dt*bdfv*dpf(:,:,1)
+    uif(:,:,nzp,2) = dt*bdfv*dpf(:,:,nzp)
+!     uif(:,:,1,2) = 0.0
+!     uif(:,:,nzp,2) = 0.0
+    ! or compute what BC should be from continuity
+!     call dfdx(uif(:,:,:,1),dpf)
+!     call dfdz(uif(:,:,:,3),dwdzf)
+!     uif(:,:,1,2) = - dpf(:,:,1) - dwdzf(:,:,1)
+!     uif(:,:,nzp,2) = - dpf(:,:,nzp) - dwdzf(:,:,nzp) 
 
 
     if(myid==0 .and. debug>=2) write(*,*) "vel BC's successful" 
